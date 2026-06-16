@@ -23,12 +23,13 @@ aws-public-ip ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/ssh-file
 Replace 'aws-public-ip' and 'ssh-file' with the relevant files before proceeding.
 
 Run these commands:
+<br>
 aws configure (Account > Security Credentials > Create access key)
-<code>terraform init</code>
-terraform plan -out=myplan.tfplan</code>
-terraform apply "myplan.tfplan"</code>
-
-<code>ansible [inventory] -m ping -i inventory.ini</code>
-<code>ansible-playbook -i inventory.ini playbook.yml</code>
+<br>
+<code>terraform init</code><br>
+<code>terraform plan -out=myplan.tfplan</code><br>
+<code>terraform apply "myplan.tfplan"</code><br>
+<code>ansible [inventory] -m ping -i inventory.ini</code><br>
+<code>ansible-playbook -i inventory.ini playbook.yml</code><br>
 
 Once done testing, <code>terraform destroy</code> to remove any charges. Now, we will proceed to Phase 2.
