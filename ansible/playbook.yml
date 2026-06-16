@@ -1,0 +1,78 @@
+---
+- name:   Configure MC Server
+  hosts:  mcserver
+  become: true  #run as sudo
+
+  vars:
+    mc_version: "1.21.4"
+    mc_dir:     /opt/minecraft  #/opt/ standard for 3rd party software
+    java_xmx:   "1024M"       #Maximum RAM allocated (tuned for t3.micro)
+    java_xms:   "512M"        #Starting RAM
+
+  tasks:
+    - name: Install Java 25                     #First task ansible will execute
+      dnf:                                      #dnf is the default package manager of Red Hat Linux
+        name:   java-25-amazon-corretto-headless
+        state:  present                          #Check if package installed, if not, then install (Idempotence)
+      
+    - name: Create server directory
+      file:                           #file handles files and directories
+        path:   "{{mc_dir}}"          #{{}} is a reference to a variable.
+        state: directory              #Tells ansible to create a folder (Idempotent)
+        owner: ec2-user               #If owner was not specified, it would belong to root.
+        mode: '0755'                  #Standard Linux file permissions. Only ec2-user can change files
+      
+    - name: Download Minecraft Server JAR
+      get_url:
+        url: "https://piston-data.mojang.com/v1/objects/97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51/server.jar"
+        dest: "{{mc_dir}}/server.jar"
+        owner: ec2-user
+        mode: '0755'
+    
+    - name: Accept EULA
+      copy:                             #copy module is used to copy files or dynamically generate
+        content: "eula=true\n"          #Defines what Ansible will write inside the file
+        dest: "{{ mc_dir }}/eula.txt"   #Destination. Full path where the file will be created on the remote server
+        owner: ec2-user
+    
+    - name: Create systemd service
+      copy:
+        dest: /etc/systemd/system/minecraft.service   #Standard directory where Linux looks for custom services
+        content:  |
+          [Unit]
+          Description=Minecraft Server
+          After=network.target
+
+          [Service]
+          User=ec2-user
+          WorkingDirectory={{mc_dir}}
+          ExecStart=/usr/bin/java -Xmx{{java_xmx}} -Xms{{java_xms}} -jar server.jar nogui
+          Restart=on-failure
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+
+        #[Unit]: Metadata;      'After' tells Linux do not start the server until the connection is up.
+        #[Service]: Core Logic; 'ExecStart' starts the server (nogui ensures no graphical window)
+        #[Install]: On-Boot;    'WantedBy' hooks service into standard Linux boot sequence
+
+    - name: Configure Minecraft server.properties
+      copy:
+        dest: "{{ mc_dir }}/server.properties"
+        owner: ec2-user
+        mode: '0644'
+        content: |
+          max-players=6
+          difficulty=normal
+          gamemode=survival
+          level-name=world
+          motd=IaC-Mc-Server
+          online-mode=true
+
+    - name: Enable and Start Minecraft Service
+      systemd:                #systemd module used to control system services on Linux. Interfaces with systemctl, which is the standard utility
+        name: minecraft       #Ansible will look for the minecraft.service file created earlier
+        enabled: true         #In Linux, there is a difference between starting and enabling. Enabling is to configure to boot automatically
+        state: started        #Tells Ansible the desired active state of the service now
+        daemon_reload: true   #Forces Linux to refresh memory to scan for new or modified files

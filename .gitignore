@@ -1,0 +1,13 @@
+# Local hardware/OS files
+.DS_Store
+Thumbs.db
+
+# Terraform specific ignores
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+
+# Ansible specific ignores
+ansible/inventory.ini
