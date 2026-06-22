@@ -5,11 +5,18 @@
 
   vars:
     mc_version: "1.21.4"
-    mc_dir:     /opt/minecraft  #/opt/ standard for 3rd party software
-    java_xmx:   "1024M"       #Maximum RAM allocated (tuned for t3.micro)
-    java_xms:   "512M"        #Starting RAM
+    mc_dir:     /opt/minecraft    #/opt/ standard for 3rd party software
+    java_xmx:   "1024M"           #Maximum RAM allocated (tune for AWS Instance)
+    java_xms:   "512M"            #Starting RAM
+    rcon_password: "{{ lookup('env', 'MCRCON_PASS') }}"  #To be changed with Ansible Vault
 
   tasks:
+
+    - name: Verify MCRCON_PASS envrionment variable is set
+      fail:
+        msg: "MCRCON_PASS environment variable is not set. Run: export MCRCON_PASS=thepassword"
+      when: rcon_password == ""
+
     - name: Install Java 25                     #First task ansible will execute
       dnf:                                      #dnf is the default package manager of Red Hat Linux
         name:   java-25-amazon-corretto-headless
@@ -22,12 +29,12 @@
         owner: ec2-user               #If owner was not specified, it would belong to root.
         mode: '0755'                  #Standard Linux file permissions. Only ec2-user can change files
       
-    - name: Download Minecraft Server JAR
+    - name: Download Minecraft Server JAR (26.1.2)
       get_url:
-        url: "https://piston-data.mojang.com/v1/objects/97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51/server.jar"
-        dest: "{{mc_dir}}/server.jar"
-        owner: ec2-user
-        mode: '0755'
+        url: "https://piston-data.mojang.com/v1/objects/97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51/server.jar"  #Download link for server JAR
+        dest: "{{mc_dir}}/server.jar"                                                                         #Download Destination
+        owner: ec2-user         
+        mode: '0755'                                                                                          #Standard Linux File Permissions
     
     - name: Accept EULA
       copy:                             #copy module is used to copy files or dynamically generate
@@ -57,6 +64,20 @@
         #[Service]: Core Logic; 'ExecStart' starts the server (nogui ensures no graphical window)
         #[Install]: On-Boot;    'WantedBy' hooks service into standard Linux boot sequence
 
+    - name: Download from mcrcon source
+      get_url:
+        url: "https://github.com/Tiiffi/mcrcon/releases/download/v0.7.2/mcrcon-0.7.2-linux-x86-64.tar.gz"
+        dest: /tmp/mcrcon.tar.gz
+    
+    - name: Extract mcrcon
+      unarchive:
+        src:  /tmp/mcrcon.tar.gz
+        dest: /opt/minecraft/
+        remote_src: yes
+        owner: ec2-user
+        mode: '0755'
+        extra_opts: ['--strip-components=1']
+
     - name: Configure Minecraft server.properties
       copy:
         dest: "{{ mc_dir }}/server.properties"
@@ -69,6 +90,66 @@
           level-name=world
           motd=IaC-Mc-Server
           online-mode=true
+          enable-rcon=true
+          rcon.port=25575
+          rcon.password={{ rcon_password }}
+          rcon.bind-address=127.0.0.1
+    
+    #ec2-user is a non root account with sudo privileges. I left it as is as I deemed it sufficient for a personal project.
+    #However, in production I would create a dedicated service account with no login shell with minimum privileges and only grant the necessary commands.
+    - name: Allow ec2-user to control minecraft servce without password
+      copy:
+        dest: /etc/sudoers.d/minecraft
+        mode: '0440'
+        content: |
+          ec2-user ALL=(ALL) NOPASSWD: /bin/systemctl stop minecraft
+          ec2-user ALL=(ALL) NOPASSWD: /bin/systemctl start minecraft
+
+    - name: Create World Backup Script
+      copy:
+        dest: /opt/minecraft/backup.sh
+        owner: ec2-user
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          # Stop server briefly, backup world then Restart
+          TIMESTAMP=$(date +%Y-%m-%d-%H%M)
+          BUCKET="mc-s3-bucket-dylxnlim-worldbackup"
+          RCON_PASS="{{ rcon_password }}"
+
+          mc_cmd() {
+            /opt/minecraft/mcrcon -H 127.0.0.1 -P 25575 -p "$RCON_PASS" "$1"
+          }
+
+          mc_cmd "say [SERVER] Scheduled world backup in 5 minutes. The server will restart briefly."
+          sleep 290
+
+          mc_cmd "say [SERVER] Restarting server in 10 seconds."
+          sleep 10
+
+          #Save world data before stopping
+          mc_cmd "save-all"
+          sleep 5
+
+          sudo systemctl stop minecraft
+          sleep 5
+          #Bundles the world folder into compressed archive in a temporary directory
+          tar -czf /tmp/world-$TIMESTAMP.tar.gz -C /opt/minecraft world
+          #Pushes the compressed world file into the AWS bucket
+          aws s3 cp /tmp/world-$TIMESTAMP.tar.gz s3://$BUCKET/backups/world-$TIMESTAMP.tar.gz
+          #Clean up and restart the server
+          rm /tmp/world-$TIMESTAMP.tar.gz
+          sudo systemctl start minecraft
+
+          echo "Backup completed: world-$TIMESTAMP.tar.gz"
+    
+    - name: Schedule Daily Backup via CronJob
+      cron:    #Uses Ansible's cron module to modify the Linux system's internal scheduler
+        name: "minecraft world backup"
+        user: ec2-user
+        hour: "3"                                                          #3AM SGT Backup Everyday
+        minute: "0"
+        job: "/opt/minecraft/backup.sh >> /opt/minecraft/backup.log 2>&1" #Logging any output or errors
 
     - name: Enable and Start Minecraft Service
       systemd:                #systemd module used to control system services on Linux. Interfaces with systemctl, which is the standard utility
@@ -76,3 +157,4 @@
         enabled: true         #In Linux, there is a difference between starting and enabling. Enabling is to configure to boot automatically
         state: started        #Tells Ansible the desired active state of the service now
         daemon_reload: true   #Forces Linux to refresh memory to scan for new or modified files
+    

@@ -15,7 +15,7 @@ Wrote inventory.ini, playbook.yml (Install Java & Create Server Directory tasks)
     <li>damemon_reload whenever files are added or modified to force Linux to refresh memory to scan.</li>
 </ul>
 
-inventory.ini will contain sensitive details, so I did not push it to the repository.
+I will hardcode sensitive details into inventory.ini, so I did not push it to the repository for now.
 <code>
 [mcserver]
 aws-public-ip ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/ssh-file.pem
@@ -24,7 +24,7 @@ Replace 'aws-public-ip' and 'ssh-file' with the relevant files before proceeding
 
 Run these commands:
 <br>
-aws configure (Account > Security Credentials > Create access key)
+<code>aws configure</code> (Account > Security Credentials > Create access key, You will need it for AWS CLI.)
 <br>
 <code>terraform init</code><br>
 <code>terraform plan -out=myplan.tfplan</code><br>
@@ -33,3 +33,26 @@ aws configure (Account > Security Credentials > Create access key)
 <code>ansible-playbook -i inventory.ini playbook.yml</code><br>
 
 Once done testing, <code>terraform destroy</code> to remove any charges. Now, we will proceed to Phase 2.
+
+In Phase 2, I will replace the default VPC with a custom one, and S3 world backups with Terraform remote state to make my architecture more robust.
+
+<h2>Phase 2 - Initialising S3 Backend for Terraform state</h2>
+<ul>
+    <li>Added bootstrap subdirectory to setup for the remote storage of tfstate in s3</li>
+    <li>When provisioning the bucket for the tfstate, it is important to add the policy lifecycle {prevent_destroy: true}</li>
+    <li>This prevents the source of truth, the tfstate file from being removed.</li>
+    <li>Created the backend.tf.bak to point</li>
+</ul>
+
+<h2>Phase 2 - Provisioning custom VPC</h2>
+<ul>
+    <li>Created a custom VPC, added a public and private subnet.</li>
+    <li>The minecraft ec2 instance will live on the public subnet, the private subnet will be utilised in Phase 3.</li>
+</ul>
+
+<h2>Phase 2 - Scheduling Daily Backups with CronJob and Ansible</h2>
+<ul>
+    <li>Installed mcrcon, a minecraft Rcon client to execute server commands as well as gracefully handle server shutdowns and saving the world state.</li>
+    <li>Practiced user with least privileges and managing sudo privileges with sudoers.d and only allowing to execute start and stop for the minecraft service.</li>
+    <li>Employed the atomic deployment mindset, where all configurations are done first before initiating services. The service(s) will never be launched in an incomplete state where setup fails if it is done after a service is started.</li>
+</ul>

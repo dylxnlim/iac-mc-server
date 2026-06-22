@@ -3,11 +3,20 @@
 Thumbs.db
 
 # Terraform specific ignores
+*.tfstate
+*.tfstate.*
 terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/.terraform.lock.hcl
 terraform/terraform.tfvars
+
+# Terraform Bootstrap ignores
+terraform/bootstrap/.terraform/
+terraform/bootstrap/*.tfstate
+terraform/bootstrap/*.tfstate.*
+terraform/bootstrap/.terraform.lock.hcl
+terraform/bootstrap/terraform.tfvars
 
 # Ansible specific ignores
 ansible/inventory.ini
