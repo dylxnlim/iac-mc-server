@@ -17,8 +17,10 @@ Wrote inventory.ini, playbook.yml (Install Java & Create Server Directory tasks)
 
 I will hardcode sensitive details into inventory.ini, so I did not push it to the repository for now.
 <code>
+```
 [mcserver]
 aws-public-ip ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/ssh-file.pem
+```
 </code>
 Replace 'aws-public-ip' and 'ssh-file' with the relevant files before proceeding.
 
@@ -56,3 +58,23 @@ In Phase 2, I will replace the default VPC with a custom one, and S3 world backu
     <li>Practiced user with least privileges and managing sudo privileges with sudoers.d and only allowing to execute start and stop for the minecraft service.</li>
     <li>Employed the atomic deployment mindset, where all configurations are done first before initiating services. The service(s) will never be launched in an incomplete state where setup fails if it is done after a service is started.</li>
 </ul>
+
+<h3>NOTE: Before Running Ansible Playbook </h3>
+Now that we have added <code>rcon_password: "{{ lookup('env', 'MCRCON_PASS') }}"</code> to the variables in the playbook, we need to define the environment variable first before running the playbook, or it will throw an error. This was done to avoid hardcoding sensitive data and pushing it to remote repositories.
+<br>
+In the playbook, I added a guardrail to confirm if the environment variable is set properly before the rest of the playbook runs, or it will throw an error.
+<br>
+
+```yml
+- name: Verify MCRCON_PASS environment variable is set
+  fail:
+    msg: "MCRCON_PASS environment variable is not set. Run: export MCRCON_PASS=thepassword"
+  when: rcon_password == ""
+```
+
+Now before running the playbook, just need to export the corresponding environment variable.
+
+```bash
+export MCRCON_PASS="YourPasswordOfChoice"
+ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+```
