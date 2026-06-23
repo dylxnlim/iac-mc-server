@@ -142,6 +142,17 @@
           sudo systemctl start minecraft
 
           echo "Backup completed: world-$TIMESTAMP.tar.gz"
+
+    - name: Ensure cronie (crontab) is installed
+      ansible.builtin.dnf:
+        name: cronie
+        state: present
+
+    - name: Ensure cron service is running and enabled
+      ansible.builtin.systemd:
+        name: crond
+        state: started
+        enabled: yes
     
     - name: Schedule Daily Backup via CronJob
       cron:    #Uses Ansible's cron module to modify the Linux system's internal scheduler

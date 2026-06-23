@@ -33,6 +33,7 @@ Run these commands:
 <code>terraform apply "myplan.tfplan"</code><br>
 <code>ansible [inventory] -m ping -i inventory.ini</code><br>
 <code>ansible-playbook -i inventory.ini playbook.yml</code><br>
+<code>ssh -i /path/toyour/key.pem username(ec2-user)@instance-public-ip</code> to verify its up.<br>
 
 Once done testing, <code>terraform destroy</code> to remove any charges. Now, we will proceed to Phase 2.
 
@@ -43,7 +44,8 @@ In Phase 2, I will replace the default VPC with a custom one, and S3 world backu
     <li>Added bootstrap subdirectory to setup for the remote storage of tfstate in s3</li>
     <li>When provisioning the bucket for the tfstate, it is important to add the policy lifecycle {prevent_destroy: true}</li>
     <li>This prevents the source of truth, the tfstate file from being removed.</li>
-    <li>Created the backend.tf.bak to point</li>
+    <li>Created the backend.tf to terraform to the s3 bucket where the tfstate file will now live.</li>
+    <li>Do <code>terraform init -migrate-state</code> to migrate state storage.</li>
 </ul>
 
 <h2>Phase 2 - Provisioning custom VPC</h2>
@@ -76,5 +78,5 @@ Now before running the playbook, just need to export the corresponding environme
 
 ```bash
 export MCRCON_PASS="YourPasswordOfChoice"
-ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+ansible-playbook -i inventory.ini playbook.yml -e "ansible_host=YourServerPublicIP"
 ```

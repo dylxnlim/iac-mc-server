@@ -20,3 +20,7 @@ terraform/bootstrap/terraform.tfvars
 
 # Ansible specific ignores
 ansible/inventory.ini
+*.retry
+
+# SSH
+*.pem
